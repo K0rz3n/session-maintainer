@@ -129,7 +129,7 @@ rabbitmqadmin purge queue name=http
 
 ## Update history
 
-- 2025-08-19(V1.1.0):
+- **2025-08-19(V1.1.0)**:
   - The configuration for URL_NORMALIZER  has been added in config.py, enabling support for scenarios where URL query parameters are used for service identification or routing in gateway/microservice environments. Users can now configure to enforce the retention of specified URL parameters in session_collection_url, which will be included as part of the session_hash calculation. These parameters will also be automatically appended to the URL used by the checker for verifying login status, a change from the previous logic where these parameters were cleared.
   - Optimized some error messages and reduced the output of the error stack.
   - Add key point explanation in README
