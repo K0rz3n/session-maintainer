@@ -3,6 +3,8 @@
 
 #project
 .auth
+static/log/*
+static/temp/*
 
 
 # Byte-compiled / optimized / DLL files
