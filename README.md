@@ -23,7 +23,7 @@ The project's prototype is the login state maintenance module of a scanner, whos
 ## Installation
 
 ```
-This project has only been tested in Mac M1 environments. There may be problems with Windows and Linux, python >= 3.12
+This project has only been tested in Mac M1 environments,python >= 3.12. There may be problems with Windows and Linux。
 ``` 
 
 ### System dependencies installation 
