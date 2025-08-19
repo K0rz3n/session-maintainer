@@ -8,13 +8,13 @@
 
 **The advantages of this project are:**
 
-- Multiple modes: Support WEB browser simulation and interface request two modes to obtain website cookies/tokens
-- Multiple sources: Supports extracting specified keys and values from urls, headers, cookies, body and other locations of data packets
-- Persistible: Supports persistence of login using database
-- Automatic update: supports configuring multiple update mechanisms such as single time, timing and period, and automatically check the validity of persistent login states and update it
-- Highly customized: supports extracting different session tokens (SSO scenarios) that appear in the same application, and also supports any non-token but need to be passed kv values
-- Human-machine Bypass: Supports human front-end simulation login, bypassing dynamic anti-human-machine nuclear mechanisms such as sliding verification codes
-- Asynchronous task: Supports the number of processes to configure the message queue to achieve multi-process parallelism, and uses two queues: Simulate and http, and parallel execution significantly improves efficiency
+- **Multiple modes**: Support WEB browser simulation and interface request two modes to obtain website cookies/tokens
+- **Multiple sources**: Supports extracting specified keys and values from urls, headers, cookies, body and other locations of data packets
+- **Persistible**: Supports persistence of sessions using database
+- **Automatic update**: Supports configuring multiple update mechanisms such as single time, timing and period, and automatically check the validity of persistent login states and update it
+- **Highly customized**: Supports extracting different session tokens (SSO scenarios) that appear in the same application, and also supports any non-token but need to be passed during requests using kv values
+- **Machine verification Bypass**: Supports human front-end simulation login, bypassing dynamic anti-human-machine nuclear mechanisms such as sliding verification codes
+- **Asynchronous task**: Supports the number of processes to configure the message queue to achieve multi-process parallelism, and uses two queues: simulate and http, and parallel execution significantly improves efficiency
 
 
 
