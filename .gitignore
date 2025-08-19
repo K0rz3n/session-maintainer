@@ -1,3 +1,10 @@
+# mac
+.DS_Store
+
+#project
+.auth
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
