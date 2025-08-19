@@ -111,3 +111,5 @@ rabbitmqadmin purge queue name=http
 - Support the location and name of custom queues
 
 - Supports Windows and Linux environments
+
+- Detailed function introduction and usage documentation 
