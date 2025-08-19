@@ -124,7 +124,11 @@ rabbitmqadmin purge queue name=http
 
 - Supports Windows and Linux environments
 
-- Detailed function introduction and usage documentation 
+- Detailed function introduction and usage documentation
+
+- Support exception notification callback capability
+
+- Support SMS verification code backfilling
 
 
 ## Update history
