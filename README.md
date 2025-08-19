@@ -4,7 +4,7 @@
 ![usage_display](./images/usage_display.png)
 
 
-session-maintainer is a highly configurable automation tool that supports automatic acquisition of website sessions through Chrome and API requests, persistence based on MySQL, and can be automatically maintained and updated. It can serve as a cornerstone for security scanning and automated verification
+**session-maintainer** is a highly configurable automation tool that supports automatic acquisition of website sessions through Chrome and API requests, persistence based on MySQL, and can be automatically maintained and updated. It can serve as a cornerstone for security scanning and automated verification
 
 **The advantages of this project are:**
 
