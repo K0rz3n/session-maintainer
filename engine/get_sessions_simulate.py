@@ -385,6 +385,36 @@ def _save_storage_state(context, app_name: str) -> None:
         logger.debug("Save storage_state failed: %r", e)
 
 
+
+def _match_target_request(want_url: str, got_url: str) -> bool:
+    from urllib import parse
+
+    want = parse.urlparse(want_url)
+    got  = parse.urlparse(got_url)
+
+    want_path = (want.path or "").rstrip("/")
+    got_path  = (got.path or "").rstrip("/")
+
+    # 1) host+path 必须完全一致
+    if (got.netloc + got_path) != (want.netloc + want_path):
+        return False
+
+    # 2) want 没有 query：只要 host+path 一致就算成功
+    if not want.query:
+        return True
+
+    # 3) want 有 query，got 没有 → 不匹配
+    if not got.query:
+        return False
+
+    # 4) 集合子集判断（忽略重复项）
+    want_pairs = set(parse.parse_qsl(want.query, keep_blank_values=True))
+    got_pairs  = set(parse.parse_qsl(got.query,  keep_blank_values=True))
+
+    return want_pairs.issubset(got_pairs)
+
+
+
 # ============== 核心采集/嗅探（每次检查/采集均新开 tab） ==============
 
 class LoginHelper:
@@ -419,12 +449,9 @@ class LoginHelper:
         sniff_ms: int = 7000,
         navigate: Optional[str] = None,
     ) -> bool:
-        want = parse.urlparse(check_url)
-
+        
         def url_match(url: str) -> bool:
-            got = parse.urlparse(url)
-            return (got.netloc + got.path + (got.query if want.query else "")) == \
-                   (want.netloc + want.path + (want.query or ""))
+            return _match_target_request(check_url,url)
 
         found = {"ok": False}
 
@@ -512,17 +539,7 @@ class LoginHelper:
             except Exception:
                 pass
 
-    @staticmethod
-    def _match_target_request(want_url: str, got_url: str) -> bool:
-        want = parse.urlparse(want_url)
-        got  = parse.urlparse(got_url)
-        want_path = (want.path or "").rstrip("/")
-        got_path  = (got.path or "").rstrip("/")
-
-        if want.query:
-            return (got.netloc + got_path + got.query) == (want.netloc + want_path + want.query)
-        return (got.netloc + got_path) == (want.netloc + want_path)
-
+    
     def _check_in_new_tab(self, target_url: str, check_url: str, benchmark: str) -> bool:
         page = self.context.new_page()
         try:
@@ -547,7 +564,7 @@ class LoginHelper:
         found = {"req": None, "resp": None}
 
         def url_match(u: str) -> bool:
-            return self._match_target_request(session_collection_url, u)
+            return _match_target_request(session_collection_url, u)
 
         def on_request(r):
             try:
@@ -591,9 +608,18 @@ class LoginHelper:
                 page.wait_for_timeout(100)
 
             if not found["req"]:
+                # 再给一点安静等待的机会
                 self._wait_until_quiet(page, quiet_ms=800, max_wait_ms=3000)
-                if not found["req"]:
-                    raise RuntimeError(f"Check session url failed: {session_collection_url}")
+
+            if not found["req"]:
+                # ★★ 改进的错误提示（含上下文信息）
+                msg = (
+                    f"Check session url failed: no matched request within {sniff_ms}ms "
+                    f"(want={session_collection_url!r}, page={session_page_url!r})."
+                )
+                logger.error(msg)
+                raise RuntimeError(msg)
+
 
             req = found["req"]
             resp = found["resp"] or (req.response() if req else None)
@@ -765,6 +791,9 @@ class LoginHelper:
                 "matched_from": src
             })
 
+
+        # ========== 构造 session_state_check =============
+
         # ===== 从配置拿基准/签名 =====
         base_ssc = session_page_item.get("session_state_check") or {}
         bench = base_ssc.get("session_check_benchmark")
@@ -788,7 +817,7 @@ class LoginHelper:
                 session_list=out_session_list,
             )
 
-        # 4) url：来源 session_collection_url，清空原 query，仅用 session_list/url 键值拼接
+        # 4) url：来源 session_collection_url，根据配置中的URL_NORMALIZER规范化URL后使用 session_list/url 键值拼接
         session_check_url = url_from_session_url_params(
             base_url=collection_url,
             session_list=out_session_list,
@@ -944,7 +973,7 @@ class LoginHelper:
         # 4) 采集
         page = self.context.new_page()
         try:
-        # ★ 新开的 page 必须 attach_human，否则没有 page.human
+            # ★ 新开的 page 必须 attach_human，否则没有 page.human
             try:
                 attach_human(page)
             except Exception:
@@ -955,24 +984,49 @@ class LoginHelper:
                 pass
 
             enriched_pages: List[Dict[str, Any]] = []
+            errors: List[str] = []
+
             for spi in session_page_items:
-                enriched = self._collect_one_page(page, spi, application_name=application_name)
+                try:
+                    enriched = self._collect_one_page(page, spi, application_name=application_name)
+                except Exception as e:
+                    # —— 仅记录“清爽的一行”上下文，不打印堆栈，避免重复与刷屏 ——
+                    msg = (
+                        "[simulate] collect failed "
+                        f"application={application_name!r} "
+                        f"page_name={spi.get('session_page_name')!r} "
+                        f"session_page_url={spi.get('session_page_url')!r} "
+                        f"session_collection_url={spi.get('session_collection_url')!r} "
+                        f"reason={e}"
+                    )
+                    logger.error(msg)     # 不带 exc_info，根因细节在内层早已记录
+                    errors.append(msg)
+                    continue              # 不中断本批次，继续后续 item
+
+                # 正常成功路径
                 enriched = {
                     "application_name": enriched.get("application_name"),
                     "achieve_method": "simulate",
                     **{k: v for k, v in enriched.items() if k != "application_name"},
                 }
-                missing = [si["session_key"] for si in enriched["session_list"] if not si.get("session_value")]
-                if missing:
-                    # 不再因为缺失而跳过；仅在需要时补个标记（_collect_one_page 已经会加）
-                    if "session_missing_keys" not in enriched:
-                        missing = [si["session_key"] for si in enriched["session_list"] if not si.get("session_value")]
-                        if missing:
-                            enriched["session_missing_keys"] = missing
 
-                
+                # 标记缺失的 key（不影响入库/返回）
+                missing = [si["session_key"] for si in enriched["session_list"] if not si.get("session_value")]
+                if missing and "session_missing_keys" not in enriched:
+                    enriched["session_missing_keys"] = missing
+
                 enriched_pages.append(enriched)
-            return enriched_pages
+
+            # —— 统一收口：有成功就返回，无成功则抛出“干净摘要” —— 
+            if enriched_pages:
+                if errors:
+                    logger.warning("[simulate] partial success: ok=%s, failed=%s", len(enriched_pages), len(errors))
+                return enriched_pages
+            else:
+                # 全部失败：抛出一条“摘要异常”，避免多层重复堆栈
+                summary = errors[0] if errors else "[simulate] collect failed: no items succeeded (unknown reason)"
+                raise RuntimeError(summary)
+
         finally:
             try:
                 page.close()
@@ -984,37 +1038,39 @@ class LoginHelper:
                 pass
 
 
+
+
 def page_items_filter(
     session_page_items: Iterable[Dict[str, Any]],
     application_name: str,
     session_hashes: Optional[Set[str]] = None
 ) -> List[Dict[str, Any]]:
-
-    # 1) 规范化 items：把 session_collection_url 统一 norm，后面计算 hash 要用
-    normalized_items: List[Dict[str, Any]] = []
+    """
+    - 保留原始的 session_collection_url，不再在这里做 norm
+    - 计算 hash 时依赖 compute_session_hash 内部自动执行的 norm
+    """
+    items: List[Dict[str, Any]] = []
     for spi in (session_page_items or []):
-        if not isinstance(spi, dict):
-            continue
-        spi2 = dict(spi)
-        spi2["session_collection_url"] = norm_url(spi2.get("session_collection_url"))
-        normalized_items.append(spi2)
+        if isinstance(spi, dict):
+            items.append(dict(spi))
 
-    # 2) 若传入了 session_hashes，则据此过滤（匹配 app+url 的哈希）
-    if session_hashes:
-        use_items: List[Dict[str, Any]] = []
-        for it in normalized_items:
-            url = it.get("session_collection_url") or ""
-            h = compute_session_hash(application_name, url)
-            if h in session_hashes:
-                use_items.append(it)
-        if not use_items:
-            logger.warning(
-                "[simulate] session_hashes provided but no items matched. count=%s",
-                len(session_hashes),
-            )
-    else:
-        use_items = normalized_items
-    
+    # 如果没有传入 session_hashes，则直接返回所有 items
+    if not session_hashes:
+        return items
+
+    use_items: List[Dict[str, Any]] = []
+    for it in items:
+        url = it.get("session_collection_url") or ""
+        h = compute_session_hash(application_name, url)
+        if h in session_hashes:
+            use_items.append(it)
+
+    if not use_items:
+        logger.warning(
+            "[simulate] session_hashes provided but no items matched. count=%s",
+            len(session_hashes),
+        )
+
     return use_items
 
 

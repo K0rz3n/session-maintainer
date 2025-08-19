@@ -40,7 +40,7 @@ class AppSimulateStage:
                 # fill/replace the corresponding location of the request packet to check the validity of the session.
                 "session_state_check":{
                     # benchmark in response of session_collection_url
-                   "session_check_benchmark":"McDonald",
+                   "session_check_benchmark":"",
                    # Plugin class name used to recalculate the signature in the API before initiating a check request. 
                    # Currently, only the interface is left, and has not been tested and implemented yet.
                    "session_check_resign":None
@@ -63,9 +63,9 @@ class AppSimulateStage:
         login_btn    = page.get_by_role("button", name="login")
 
         # Username input that simulates human behavior
-        page.human.type(user_input, "safeshop2", per_key=(40, 95), typo_prob=0.02)
+        page.human.type(user_input, "", per_key=(40, 95), typo_prob=0.02)
         # Password input that simulates human behavior
-        page.human.type(pwd_input, "cs123456", per_key=(25, 60), secret=True)
+        page.human.type(pwd_input, "", per_key=(25, 60), secret=True)
 
         # Optional: Click the "consent" icon and then click back (simulate real users)
         try:
@@ -86,6 +86,9 @@ class AppSimulateStage:
 
         # Wait after logging in
         page.wait_for_timeout(random.randint(500, 900))
+
+
+    
 
         
 

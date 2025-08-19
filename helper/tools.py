@@ -8,16 +8,13 @@ import logging
 import json 
 from urllib import parse
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Callable
+from collections import Counter, defaultdict
 from playwright.sync_api import Page
+from helper.url_normalizer import norm_url
 
 from environment.environ import environ
 
 logger = logging.getLogger(__name__)
-
-# ------------- 格式化url ------------
-def norm_url(u: Optional[str]) -> str:
-    """去掉首尾空白并去掉末尾斜杠。None -> 空串。"""
-    return (u or "").strip().rstrip("/")
 
 
 # ------------- 编码正则的特殊符号 ------------
@@ -65,7 +62,8 @@ def iter_py_files(dir_path: str) -> Iterable[str]:
 # ---------- 计算 session_hash 保持和数据库一致 ----------
 def compute_session_hash(application_name: Optional[str], session_collection_url: Optional[str]) -> str:
     a = (application_name or "").strip()
-    u = (session_collection_url or "").strip().rstrip("/")  # 去掉尾部 /,避免意外引入的差异
+    # 用统一的 URL 规范化逻辑
+    u = norm_url(session_collection_url).lower()
     base = f"{a}\n{u}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
@@ -308,20 +306,49 @@ def body_from_base_and_session_list(
 
 def url_from_session_url_params(base_url: str, session_list: Iterable[Dict[str, Any]]) -> str:
     """
-    清空 base_url 的原 query，然后把 session_list 中 matched_from 以 'url' 开头的键值对
-    按 URL query 的格式拼接进去。
+    先对 base_url 执行 norm_url（保留/清空 query 的规则由 norm_url 配置决定），
+    然后把 session_list 中 matched_from 以 'url' 开头的键值对拼接到 query 末尾。
+
+    若规范化后的 URL 已包含与要追加的键相同的 query key，则抛出异常中止。
+    若 session_list 内部含有重复的 key，也抛出异常。
     """
-    pu = parse.urlparse(base_url)
-    q = {}
+    # 1) 规范化 base_url
+    norm = norm_url(base_url)
+    pu = parse.urlparse(norm)
+
+    # 2) 解析现有 query
+    existing_pairs = parse.parse_qsl(pu.query or "", keep_blank_values=True, strict_parsing=False)
+    existing_keys = {k for k, _ in existing_pairs}
+
+    # 3) 从 session_list 收集要追加的 url-* 键值
+    additions = []
+    add_keys_seen = set()
     for it in (session_list or []):
         src = str(it.get("matched_from") or "").lower()
         if not src.startswith("url"):
             continue
         key = it.get("session_key")
         val = it.get("session_value")
-        if key and val is not None:
-            q[str(key)] = [str(val)]
-    new_q = parse.urlencode({k: v[-1] if isinstance(v, list) and v else "" for k, v in q.items()})
-    return parse.urlunparse(pu._replace(query=new_q))
+        if not key or val is None:
+            continue
+        k = str(key)
+        v = str(val)
 
+        # 与现有 query 冲突 → 抛错
+        if k in existing_keys:
+            raise ValueError(
+                f"session_check_url construct exception: normalized URL already contains query key {k!r}; "
+                "refusing to append duplicated key from session_list."
+            )
+        # session_list 内部重复 → 抛错
+        if k in add_keys_seen:
+            raise ValueError(
+                f"session_check_url construct exception: session_list contains duplicated query key {k!r}."
+            )
+        add_keys_seen.add(k)
+        additions.append((k, v))
 
+    # 4) 拼接并返回
+    new_pairs = existing_pairs + additions
+    new_query = parse.urlencode(new_pairs, doseq=True)
+    return parse.urlunparse(pu._replace(query=new_query))

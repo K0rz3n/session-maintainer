@@ -52,4 +52,3 @@ class AppHttpProd(object):
             # Currently, only the interface is left, and has not been tested and implemented yet.
             "session_check_resign":None
         }
-

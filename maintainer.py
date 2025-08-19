@@ -21,7 +21,7 @@ from environment.pylogger import pylogger  # noqa: F401
 from environment.environ import environ
 from helper.database_helper import SessionDB
 from engine.get_applications import collect_classes
-from helper.tools import compute_session_hash, iter_urls_for_instance, norm_url
+from helper.tools import compute_session_hash, iter_urls_for_instance
 
 # 生产者（派发任务）与巡检
 from services import autologin_producer as svc_actors
@@ -102,7 +102,7 @@ def ensure_mysql() -> None:
 
     sysname = platform.system().lower()
     candidates = (
-        ["brew services start mysql", "brew services start mysql@8.0","sudo /usr/local/mysql/support-files/mysql.server start"] if "darwin" in sysname else
+        ["brew services start mysql", "brew services start mysql@8.0"] if "darwin" in sysname else
         ["systemctl start mysql", "systemctl start mysqld", "service mysql start", "service mysqld start"] if "linux" in sysname else
         []
     )
@@ -246,7 +246,7 @@ def _wait_consumers(queue: str, expected: int, timeout: float = 20.0) -> bool:
 # =============================== 首次/增量派发 ===============================
 
 def _config_hashes_from_classes(classes: Iterable[Type]) -> Set[str]:
-    """基于外部传入的 classes 计算配置哈希集合；URL 先 norm 再哈希。"""
+    """基于外部传入的 classes 计算配置哈希集合"""
     out: Set[str] = set()
     for cls in classes:
         try:
@@ -261,8 +261,7 @@ def _config_hashes_from_classes(classes: Iterable[Type]) -> Set[str]:
 
         for _mode, url in iter_urls_for_instance(inst):
             try:
-                u = norm_url(url)
-                out.add(compute_session_hash(app, u))
+                out.add(compute_session_hash(app, url))
             except Exception:
                 continue
     return out
@@ -729,7 +728,7 @@ def print_banner():
     ▒   ██▒▒▓█  ▄   ▒   ██▒  ▒   ██▒░██░▒██   ██░▓██▒  ▐▌██▒                            
     ▒██████▒▒░▒████▒▒██████▒▒▒██████▒▒░██░░ ████▓▒░▒██░   ▓██░     Author : K0rz3n                       
     ▒ ▒▓▒ ▒ ░░░ ▒░ ░▒ ▒▓▒ ▒ ░▒ ▒▓▒ ▒ ░░▓  ░ ▒░▒░▒░ ░ ▒░   ▒ ▒      Email : K0rz3n@163.com                      
-    ░ ░▒  ░ ░ ░ ░  ░░ ░▒  ░ ░░ ░▒  ░ ░ ▒ ░  ░ ▒ ▒░ ░ ░░   ░ ▒░     Version: 1.0                      
+    ░ ░▒  ░ ░ ░ ░  ░░ ░▒  ░ ░░ ░▒  ░ ░ ▒ ░  ░ ▒ ▒░ ░ ░░   ░ ▒░     Version: 1.1.0                      
     ░  ░  ░     ░   ░  ░  ░  ░  ░  ░   ▒ ░░ ░ ░ ▒     ░   ░ ░                             
         ░     ░  ░      ░        ░   ░      ░ ░           ░                             
                                                                                         

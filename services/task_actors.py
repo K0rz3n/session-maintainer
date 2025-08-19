@@ -172,10 +172,8 @@ def _run_refresh(class_ref: str, session_hashes: Optional[List[str]] = None) -> 
     try:
         msg = dramatiq.get_current_message()
         attempt = (msg.options.get("retries", 0) or 0) + 1
-        logger.info(
-            f"[update] id={msg.message_id} attempt={attempt} class={class_ref} "
-            f"hashes={len(session_hashes or [])}"
-        )
+        logger.info("[update] id=%s attempt=%s class=%s hashes=%s",
+                    getattr(msg, "message_id", "?"), attempt, class_ref, len(session_hashes or []))
     except Exception:
         pass
 
@@ -184,37 +182,32 @@ def _run_refresh(class_ref: str, session_hashes: Optional[List[str]] = None) -> 
         enriched_pages = RefreshCookies(class_ref).refresh(session_hashes=hashes_set)
 
         if not isinstance(enriched_pages, list):
-            logger.error("RefreshCookies.refresh() must return List[Dict], got %r", type(enriched_pages))
+            # 这是“配置/实现”问题，直接判定为永久错误
             raise NonRetriableError("bad return type from RefreshCookies.refresh()")
 
         affected = get_db().upsert_enriched_pages(enriched_pages)
-        logger.warning(f"[DB] upsert affected={affected}")
+        logger.warning("[DB] upsert affected=%s", affected)
         return None
+
     except (KeyboardInterrupt, SystemExit):
         logger.warning("[update] user interrupted → no retry")
         raise
+
     except Exception as e:
         if _is_transient_error(e):
-            # 计算第几次尝试（用于 backoff）
+            # 瞬时错误：打印简短日志 + 退避 等待后重抛，让 Dramatiq 的 Retries 中间件处理
             try:
                 msg = dramatiq.get_current_message()
-                attempt = (msg.options.get("retries", 0) or 0) + 1  # 第几次尝试（从 1 开始）
+                attempt = (msg.options.get("retries", 0) or 0) + 1
             except Exception:
                 attempt = 1
-
             delay = _retry_backoff_seconds(attempt, base=1.5, cap=45.0)
-            # 瞬时错误只打印简短告警，不打堆栈；在本 worker 内等待后再交给 Dramatiq 重试
-            logger.warning(
-                f"[update] transient network error (attempt={attempt}) for {class_ref}, "
-                f"will retry after {delay:.1f}s: {e}"
-            )
+            logger.warning("[update] transient network error (attempt=%s) for %s, will retry after %.1fs: %s",
+                           attempt, class_ref, delay, e)
             time.sleep(delay)
-            # 重新抛出原异常（非 NonRetriableError），让 Dramatiq 的 Retries 中间件处理重试
-            raise
-        else:
-            # 永久错误：打印 error 并停止重试
-            logger.error(f"[update] permanent error, no retry: {e!r}", exc_info=True)
-            raise NonRetriableError(str(e))
+            raise  # 交给 Dramatiq 重试
+        # 永久错误：不再打印 error，直接抛给上层（避免重复日志）
+        raise NonRetriableError(str(e))
 
 # ========================== Actors ==========================
 
@@ -225,20 +218,18 @@ def _run_refresh(class_ref: str, session_hashes: Optional[List[str]] = None) -> 
     time_limit=int(GLOBAL["time_limit_ms"]),
     throws=(NonRetriableError, KeyboardInterrupt, SystemExit),
 )
-def update_simulate(class_ref: str, session_hashes: Optional[List[str]] = None) -> Dict[str, Any]:
-    """模拟登录获取会话"""
-    # 严格校验 simulate 配置
+def update_simulate(class_ref: str, session_hashes: Optional[List[str]] = None) -> None:
+    # 仍做严格校验（校验失败 → NonRetriableError，外层不再重复打日志）
     try:
         inst = _import_instance(class_ref)
         ok, probs = validate_simulate_strict(inst)
     except Exception as e:
-        logger.error("[update] validate simulate crashed for %s: %r", class_ref, e)
-        raise NonRetriableError(f"{class_ref} validate simulate crashed")
+        raise NonRetriableError(f"{class_ref} validate simulate crashed: {e}")
 
     if not ok:
         msg = summarize_problems("", probs)
-        logger.error("[update] invalid simulate config for %s:\n%s", class_ref, msg)
-        raise NonRetriableError(f"{class_ref} invalid simulate config")
+        raise NonRetriableError(f"{class_ref} invalid simulate config:\n{msg}")
+
     _run_refresh(class_ref, session_hashes)
     return None
 
@@ -248,20 +239,17 @@ def update_simulate(class_ref: str, session_hashes: Optional[List[str]] = None) 
     time_limit=int(GLOBAL["time_limit_ms"]),
     throws=(NonRetriableError, KeyboardInterrupt, SystemExit),
 )
-def update_http(class_ref: str, session_hashes: Optional[List[str]] = None) -> Dict[str, Any]:
-    """HTTP 直连获取会话"""
-    # 严格校验 http 配置
+def update_http(class_ref: str, session_hashes: Optional[List[str]] = None) -> None:
     try:
         inst = _import_instance(class_ref)
         ok, probs = validate_http_strict(inst)
     except Exception as e:
-        logger.error("[update] validate http crashed for %s: %r", class_ref, e)
-        raise NonRetriableError(f"{class_ref} validate http crashed")
+        raise NonRetriableError(f"{class_ref} validate http crashed: {e}")
 
     if not ok:
         msg = summarize_problems("", probs)
-        logger.error("[update] invalid http config for %s:\n%s", class_ref, msg)
-        raise NonRetriableError(f"{class_ref} invalid http config")
+        raise NonRetriableError(f"{class_ref} invalid http config:\n{msg}")
+
     _run_refresh(class_ref, session_hashes)
     return None
 

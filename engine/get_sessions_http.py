@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Set
 from urllib import parse
 
 from helper.tools import *
+from helper.url_normalizer import norm_url
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +145,7 @@ class GetCookieItmesHttp:
     ) -> List[Dict[str, Any]]:
 
         # 0) hash 过滤
-        normed_url = norm_url(session_collection_url)
-        my_hash = compute_session_hash(application_name, normed_url)
+        my_hash = compute_session_hash(application_name, session_collection_url)
         if session_hashes and my_hash not in session_hashes:
             logger.info("[http] skip by session_hash filter: %s", my_hash)
             return []
@@ -164,14 +164,14 @@ class GetCookieItmesHttp:
         # 1) 发一次原始采集请求（保持和以前一致）
         res = http_request(
             m,
-            normed_url,
+            session_collection_url,
             headers=session_collection_headers,
             cookies=session_collection_cookies,
             data=session_collection_data if m == "POST" else None,
             body_type="json" if m == "GET" else body_type,
             timeout=timeout,
         )
-        session_collection_url_query = normed_url
+        session_collection_url_query = session_collection_url
 
         try:
             body_text_for_header = res.text
@@ -213,14 +213,16 @@ class GetCookieItmesHttp:
                 if isinstance(session_collection_data, dict)
                 else session_collection_data
             )
+        
+        # ======== 构造  new_session_state_check ================
 
         # 4)输入的 state_check 里可能有 url/headers/body，按新规则改造：
         inp_ssc = dict(session_state_check or {})
         bench = inp_ssc.get("session_check_benchmark")
         resign = inp_ssc.get("session_check_resign")
 
-        # 1) URL：来源输入 session_check_url（若无用 normed_url），清空原 query，仅用 session_list/url 键值拼接
-        in_url = inp_ssc.get("session_check_url") or normed_url
+        # 1) URL：来源 session_collection_url，根据配置中的URL_NORMALIZER规范化URL后使用 session_list/url 键值拼接
+        in_url = inp_ssc.get("session_check_url") or session_collection_url
         session_check_url = url_from_session_url_params(
             base_url=in_url,
             session_list=out_list,
@@ -259,7 +261,7 @@ class GetCookieItmesHttp:
             "achieve_method": "http",
             "session_page_name": session_page_name,
             "session_page_url": session_page_url,
-            "session_collection_url": normed_url,
+            "session_collection_url": session_collection_url,
             "session_collection_url_query": session_collection_url_query,
             "session_collection_method": {
                 "name": m,

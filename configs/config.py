@@ -86,3 +86,28 @@ SESSION_CHECKER = {
     }
 
 }
+
+
+#Keep the necessary query for sessioncollectionurl matching the rule, and solve the problem of some URLs using query to route gateways.
+#The links affected are:
+#(1) Before generating the URL used by checker to verify the login state, the URL will be constructed according to this configuration, and the necessary routing parameters will be kept forcibly. Otherwise, all query will be deleted and the parameters obtained in sessionlist will be spliced.
+#(2) When generating sessionhash, the URL will be normalized using this configuration and the necessary parameters will be retained. Otherwise, all query will be deleted and then the calculation will be performed.
+URL_NORMALIZER =  {
+    "rules": [
+      {
+        "host": "example.com",
+        "path": "/login",
+        "keep_keys": ["token", "ts"]
+      },
+      {
+        "host": "example.com",
+        "path_prefix": "/api/",
+        "keep_keys": ["session_id"]
+      },
+      {
+        "host": "another.com",
+        "path_regex": "^/v1/resource/[0-9]+$",
+        "keep_keys": ["uid", "sig"]
+      }
+    ]
+  }

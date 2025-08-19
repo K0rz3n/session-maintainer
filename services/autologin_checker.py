@@ -13,7 +13,6 @@ from urllib import parse
 from helper.database_helper import SessionDB
 from engine.get_applications import collect_classes
 from helper.tools import *
-
 from services.task_actors import update_simulate, update_http
 
 logger = logging.getLogger(__name__)
@@ -188,7 +187,7 @@ def check_once(*, http_timeout: float, user_agent: str) -> None:
             sess_hash   = r.get("session_hash")
 
             # 直接用 DB 里的 session_state_check
-            url     = state_check.get("session_check_url") or r.get("session_collection_url")
+            url     = state_check.get("session_check_url")
             m_name  = (state_check.get("session_check_method_name") or "GET").upper()
             m_type  = state_check.get("session_check_method_type")
             bench   = state_check.get("session_check_benchmark")
