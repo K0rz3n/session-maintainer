@@ -130,6 +130,8 @@ rabbitmqadmin purge queue name=http
 
 - Support SMS verification code backfilling
 
+- Support graphical interface configuration and result viewing
+
 
 ## Update history
 
