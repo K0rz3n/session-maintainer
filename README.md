@@ -6,7 +6,7 @@
 
 **Session-Maintainer** is a highly configurable automation tool that supports automatic acquisition of website sessions through Chrome and API requests, persistence based on MySQL, and can be automatically maintained and updated. It can serve as a cornerstone for security scanning and automated verification.
 
-The project's prototype is the login state maintenance module of a scanner, whose **operation mode has been refined and validated through long-term practical use**. It has now been reorganized and restructured for open-source sharing.
+The project's prototype is the login state maintenance module of a scanner, whose **operation mode has been refined and validated through long-term practical use**. It has now been reorganized and restructured for open-source sharing.Some originally existing features have not yet been re-added and have been placed on the TODO LIST. Please look forward to future updates.
 
 **The advantages of this project are:**
 
